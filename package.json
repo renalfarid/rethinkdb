@@ -1,0 +1,14 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "rethinkdb server",
+  "main": "index.js",
+  "author": "enal",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "rethinkdb": "^2.4.2",
+    "ws": "^8.18.0"
+  }
+}

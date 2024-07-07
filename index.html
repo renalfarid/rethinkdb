@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RethinkDB with Vanilla JS</title>
+</head>
+<body>
+    <header id="ws-connect"></header>
+    <h1>Users</h1>
+    <ul id="user-list"></ul>
+
+    <h2>Add User</h2>
+    <form id="user-form">
+        <input type="text" id="name" placeholder="Name" required>
+        <input type="number" id="age" placeholder="Age" required>
+        <button type="submit">Add User</button>
+    </form>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+    const apiUrl = 'http://127.0.0.1:3000';
+    const wsUrl = 'ws://127.0.0.1:3000';
+    const userList = document.getElementById('user-list');
+    const userForm = document.getElementById('user-form');
+    const updateForm = document.createElement('form'); // Update form
+    updateForm.id = 'update-form';
+    updateForm.innerHTML = `
+        <h2>Update User</h2>
+        <input type="hidden" id="update-id">
+        <input type="text" id="update-name" placeholder="Name" readonly>
+        <input type="number" id="update-age" placeholder="New Age" required>
+        <button type="submit">Update Age</button>
+    `;
+    document.body.appendChild(updateForm);
+    updateForm.style.display = 'none';
+
+    // Fetch users from the API
+    fetch(apiUrl + '/api/users')
+        .then(response => response.json())
+        .then(users => {
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.textContent = `${user.name} (Age: ${user.age})`;
+                li.id = user.id; // Set ID to keep track of elements
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Edit';
+                editButton.onclick = () => {
+                    document.getElementById('update-id').value = user.id;
+                    document.getElementById('update-name').value = user.name;
+                    document.getElementById('update-age').value = user.age;
+                    updateForm.style.display = 'block';
+                };
+                li.appendChild(editButton);
+                userList.appendChild(li);
+            });
+        });
+
+    // Add a new user via the API
+    userForm.addEventListener('submit', event => {
+        event.preventDefault();
+
+        const name = document.getElementById('name').value;
+        const age = document.getElementById('age').value;
+
+        fetch(apiUrl + '/api/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name, age })
+        })
+            .then(response => {
+                response.json();
+                userForm.reset();
+            });
+    });
+
+    // Handle user update via the API
+    updateForm.addEventListener('submit', event => {
+        event.preventDefault();
+
+        const id = document.getElementById('update-id').value;
+        const age = document.getElementById('update-age').value;
+
+        fetch(apiUrl + '/api/users/' + id, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ age })
+        })
+            .then(response => {
+                response.json();
+                updateForm.style.display = 'none';
+            });
+    });
+
+    // Set up WebSocket connection
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onmessage = (event) => {
+        const change = JSON.parse(event.data);
+
+        if (change.new_val && !change.old_val) {
+            // New document inserted
+            const li = document.createElement('li');
+            li.textContent = `${change.new_val.name} (Age: ${change.new_val.age})`;
+            li.id = change.new_val.id;
+            const editButton = document.createElement('button');
+            editButton.textContent = 'Edit';
+            editButton.onclick = () => {
+                document.getElementById('update-id').value = change.new_val.id;
+                document.getElementById('update-name').value = change.new_val.name;
+                document.getElementById('update-age').value = change.new_val.age;
+                updateForm.style.display = 'block';
+            };
+            li.appendChild(editButton);
+            userList.appendChild(li);
+        } else if (change.new_val && change.old_val) {
+            // Document updated
+            const li = document.getElementById(change.new_val.id);
+            if (li) {
+                li.textContent = `${change.new_val.name} (Old Age: ${change.old_val.age} - New Age: ${change.new_val.age})`;
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Edit';
+                editButton.onclick = () => {
+                    document.getElementById('update-id').value = change.new_val.id;
+                    document.getElementById('update-name').value = change.new_val.name;
+                    document.getElementById('update-age').value = change.new_val.age;
+                    updateForm.style.display = 'block';
+                };
+                li.appendChild(editButton);
+            }
+        } else if (!change.new_val && change.old_val) {
+            // Document deleted
+            const li = document.getElementById(change.old_val.id);
+            if (li) {
+                userList.removeChild(li);
+            }
+        }
+    };
+
+    ws.onopen = () => {
+        document.getElementById('ws-connect').innerText = 'socket connected'
+        console.log('WebSocket connection established');
+    };
+
+    ws.onclose = () => {
+        document.getElementById('ws-connect').innerText = 'socket disconnected'
+        console.log('WebSocket connection closed');
+    };
+  });
+
+  </script>
+</body>
+</html>
